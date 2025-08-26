@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EPUB Toolbox v3.1 — Repair + Merge (Google Play Books)</title>
+<title>EPUB Toolbox v4.0 — Repair + Merge (Google Play Books)</title>
 <style>
 :root{--bg:#0b0f14;--panel:#121821;--ink:#e7edf6;--muted:#94a3b8;--accent:#4f46e5;--ok:#10b981;--warn:#f59e0b;--bad:#ef4444}
 *{box-sizing:border-box}
@@ -36,45 +36,33 @@ main{max-width:1200px;margin:0 auto;padding:0 16px 48px}
 .caps{letter-spacing:.02em;text-transform:uppercase;font-size:11px;color:#a5b4fc}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .k{display:inline-block;background:#0b1220;border:1px solid #1f2937;border-radius:6px;padding:0 6px;font:12px/20px ui-monospace,monospace;color:#cfe2ff}
-details{background:#0a1220;border:1px solid #1f2937;border-radius:10px;padding:10px}
-details summary{cursor:pointer;font-weight:600}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid #1f2937;border-radius:999px;background:#0b1220;font-size:12px}
 .dot{width:8px;height:8px;border-radius:50%}
 .dot.base{background:var(--accent)} .dot.addon{background:#22d3ee} .dot.merge{background:var(--ok)}
-.hint{color:#93c5fd}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
 <header>
-  <h1>EPUB Toolbox v3.1</h1>
-  <div class="sub">Repair EPUBs and merge add-on chapters into an existing book — all locally, Google Play Books–friendly.</div>
+  <h1>EPUB Toolbox v4.0</h1>
+  <div class="sub">Repair EPUBs and merge add-on chapters. Hardened for Google Play Books (EPUB2/3).</div>
 </header>
 
 <main>
   <div class="card">
     <div class="top">
-      <!-- Base -->
       <div class="drop" id="dropBase">
         <span class="title">Base EPUB</span>
         <input type="file" id="pickBase" accept=".epub,application/epub+zip"/>
-        <div>
-          <div style="font-weight:700">Drop base EPUB or click to choose</div>
-          <div class="meta">Metadata is kept from here.</div>
-        </div>
+        <div><div style="font-weight:700">Drop base EPUB or click</div><div class="meta">Metadata kept from here.</div></div>
         <div id="selBase" class="selected"><span class="pill meta">(No file selected)</span></div>
       </div>
-      <!-- Add-on -->
       <div class="drop" id="dropAddon">
         <span class="title">Add-on EPUB (optional)</span>
         <input type="file" id="pickAddon" accept=".epub,application/epub+zip"/>
-        <div>
-          <div style="font-weight:700">Drop add-on EPUB or click to choose</div>
-          <div class="meta">Contains new chapters to append.</div>
-        </div>
+        <div><div style="font-weight:700">Drop add-on EPUB or click</div><div class="meta">Only new chapters append.</div></div>
         <div id="selAddon" class="selected"><span class="pill meta">(No file selected)</span></div>
       </div>
-
       <button class="btn" id="btnRepair" disabled>Scan & Repair Base</button>
       <button class="btn" id="btnMerge" disabled>Merge Add-on → Base & Repair</button>
     </div>
@@ -85,7 +73,7 @@ details summary{cursor:pointer;font-weight:600}
         <div class="preview">
           <div id="thumbBase" class="placeholder">No Cover</div>
           <div>
-            <div class="caps">Base:</div>
+            <div class="caps">Base</div>
             <div id="nameBase" class="meta">—</div>
             <div id="sizeBase" class="meta">—</div>
             <div id="chapBase" class="meta">Chapters: —</div>
@@ -94,20 +82,20 @@ details summary{cursor:pointer;font-weight:600}
         <div class="preview">
           <div id="thumbAddon" class="placeholder">No Cover</div>
           <div>
-            <div class="caps">Add-on:</div>
+            <div class="caps">Add-on</div>
             <div id="nameAddon" class="meta">—</div>
             <div id="sizeAddon" class="meta">—</div>
             <div id="chapAddon" class="meta">Chapters: —</div>
           </div>
         </div>
-        <details id="detChapters" open>
+        <details open>
           <summary>Chapter preview</summary>
           <div class="row" id="chips"></div>
           <div class="meta" id="mergeHint">Select files to analyze chapters.</div>
         </details>
         <div class="row">
           <a id="download" class="btn" style="display:none;background:var(--ok)">Download Result</a>
-          <span class="meta">Tip: Press <span class="k">Ctrl/⌘ + Enter</span> to run.</span>
+          <span class="meta">Tip: <span class="k">Ctrl/⌘ + Enter</span> to run.</span>
         </div>
       </div>
     </div>
@@ -115,96 +103,90 @@ details summary{cursor:pointer;font-weight:600}
 </main>
 
 <script>
-/* ---------- utilities ---------- */
+/* ===== basics ===== */
 const $ = s=>document.querySelector(s);
-const logEl = $('#log');
-function log(m,cls=''){ const d=document.createElement('div'); if(cls)d.className=cls; d.innerHTML=m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
-function resetLog(){ logEl.innerHTML=''; const dl=$('#download'); dl.style.display='none'; dl.removeAttribute('href'); dl.removeAttribute('download'); }
-function human(b){ const u=['B','KB','MB','GB']; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(1):n)+" "+u[i]; }
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]) )}
+const logEl=$('#log');
+function log(m,cls=''){const d=document.createElement('div'); if(cls)d.className=cls; d.innerHTML=m; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;}
+function resetLog(){ logEl.innerHTML=''; const d=$('#download'); d.style.display='none'; d.removeAttribute('href'); d.removeAttribute('download'); }
+function human(b){const u=['B','KB','MB','GB']; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(1):n)+" "+u[i];}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
 function extOf(p){const m=p.match(/\.([^.]+)$/); return m? m[1].toLowerCase() : '';}
-function dirOf(p){const i=p.lastIndexOf('/'); return i>=0? p.slice(0,i+1):'';}
 function normalizePath(p){ return p.replace(/\\/g,'/').replace(/\/+/g,'/'); }
-function joinPath(base,rel){ const b=base.endsWith('/')?base:base+'/'; const raw=b+rel; const parts=[]; raw.split('/').forEach(seg=>{ if(!seg||seg==='.')return; if(seg==='..')parts.pop(); else parts.push(seg); }); return parts.join('/'); }
+function dirOf(p){const i=p.lastIndexOf('/'); return i>=0? p.slice(0,i+1):'';}
 function basename(p){return p.split('/').pop();}
+function joinPath(...args) {
+    const parts = args.flatMap(part => part.split('/'));
+    const newParts = [];
+    for (const part of parts) {
+        if (!part || part === '.') continue;
+        if (part === '..') newParts.pop();
+        else newParts.push(part);
+    }
+    return newParts.join('/');
+}
+function sanitizeFilename(name) { return name.replace(/[\s]/g, '_'); }
 
-/* ---------- state ---------- */
-let baseFile=null, addonFile=null, baseZip=null, addonZip=null, baseA=null, addonA=null;
+/* ===== state/UI ===== */
+let baseFile=null, addonFile=null;
+const btnRepair=$('#btnRepair'), btnMerge=$('#btnMerge'), dlA=$('#download');
 const pickBase=$('#pickBase'), pickAddon=$('#pickAddon');
 const dropBase=$('#dropBase'), dropAddon=$('#dropAddon');
 const selBase=$('#selBase'), selAddon=$('#selAddon');
-const btnRepair=$('#btnRepair'), btnMerge=$('#btnMerge'), dlA=$('#download');
 const nameBase=$('#nameBase'), sizeBase=$('#sizeBase'), chapBase=$('#chapBase'), thumbBase=$('#thumbBase');
 const nameAddon=$('#nameAddon'), sizeAddon=$('#sizeAddon'), chapAddon=$('#chapAddon'), thumbAddon=$('#thumbAddon');
 const chips=$('#chips'), mergeHint=$('#mergeHint');
 
-/* ---------- file selection UI (no programmatic clicks; native only) ---------- */
 function showSel(which, file){
-  const sel = which==='base'? selBase : selAddon;
-  const drop = which==='base'? dropBase : dropAddon;
-  const nameEl = which==='base'? nameBase : nameAddon;
-  const sizeEl = which==='base'? sizeBase : sizeAddon;
-  const chapEl = which==='base'? chapBase : chapAddon;
-  const thumb = which==='base'? thumbBase : thumbAddon;
-
+  const sel=which==='base'? selBase:selAddon;
+  const drop=which==='base'? dropBase:dropAddon;
+  const nameEl=which==='base'? nameBase:nameAddon;
+  const sizeEl=which==='base'? sizeBase:sizeAddon;
   if(!file){
     sel.innerHTML = `<span class="pill meta">(No file selected)</span>`;
-    drop.classList.remove('ready');
-    nameEl.textContent='—'; sizeEl.textContent='—'; chapEl.textContent='Chapters: —';
-    thumb.className='placeholder'; thumb.textContent='No Cover'; thumb.style.backgroundImage='none';
-    return;
+    drop.classList.remove('ready'); nameEl.textContent='—'; sizeEl.textContent='—';
+    if(which === 'base') chapBase.textContent = 'Chapters: —'; else chapAddon.textContent = 'Chapters: —';
+    const thumb = which === 'base' ? thumbBase : thumbAddon;
+    thumb.className='placeholder'; thumb.textContent='No Cover'; thumb.style.backgroundImage='none'; return;
   }
-  sel.innerHTML = `<span class="pill"><span class="hint">Ready:</span> <b>${escapeHtml(file.name)}</b> — ${human(file.size)}</span>`;
-  nameEl.textContent=file.name; sizeEl.textContent=human(file.size);
-  drop.classList.add('ready');
+  sel.innerHTML=`<span class="pill"><b>${escapeHtml(file.name)}</b> — ${human(file.size)}</span>`;
+  drop.classList.add('ready'); nameEl.textContent=file.name; sizeEl.textContent=human(file.size);
 }
 
 async function coverPreview(which, file){
-  const thumb = which==='base'? thumbBase : thumbAddon;
+  const thumb=which==='base'? thumbBase:thumbAddon;
   try{
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
-    const {opfPath} = await extractOpf(zip);
-    const opfDir=dirOf(opfPath);
-    const opfStr=await zip.file(opfPath).async('string');
+    const zip=await JSZip.loadAsync(await file.arrayBuffer());
+    const {opfPath}=await extractOpf(zip);
+    const opfDir=dirOf(opfPath), opfStr=await zip.file(opfPath).async('string');
     const opfDoc=new DOMParser().parseFromString(opfStr,'application/xml');
-    const items=[...opfDoc.querySelectorAll('manifest > item')].map(x=>({href:normalizePath(x.getAttribute('href')||''), type:(x.getAttribute('media-type')||'').toLowerCase(), properties:x.getAttribute('properties')||''}));
-    let cover = items.find(i=>/\bcover-image\b/.test(i.properties||'')) || items.find(i=>/cover\.(jpg|jpeg|png|gif|webp|avif)$/i.test(i.href)) || items.find(i=>/^image\//.test(i.type));
-    if(!cover) throw new Error('no cover');
-    const abs=joinPath(opfDir, cover.href);
-    const blob=await zip.file(abs).async('blob');
+    const items=[...opfDoc.querySelectorAll('manifest>item')].map(x=>({href:normalizePath(x.getAttribute('href')||''),type:(x.getAttribute('media-type')||'').toLowerCase(),properties:x.getAttribute('properties')||''}));
+    let cover=items.find(i=>/\bcover-image\b/.test(i.properties||''))||items.find(i=>/cover\.(jpg|jpeg|png|gif|webp|avif)$/i.test(i.href))||items.find(i=>/^image\//.test(i.type));
+    if(!cover) throw 0;
+    const abs=joinPath(opfDir,cover.href); const blob=await zip.file(abs).async('blob');
     let final=blob;
-    if(/image\/(webp|avif)/i.test(blob.type)){
-      const bmp=await createImageBitmap(blob).catch(()=>null);
-      if(bmp){ const cnv=document.createElement('canvas'); cnv.width=bmp.width; cnv.height=bmp.height; cnv.getContext('2d').drawImage(bmp,0,0);
-        final=await new Promise(r=>cnv.toBlob(r,'image/jpeg',0.9)); }
-    }
-    const url=URL.createObjectURL(final);
-    const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt=which+' cover';
-    thumb.className=''; thumb.innerHTML=''; thumb.appendChild(img);
+    if(/image\/(webp|avif|svg|png)/i.test(blob.type)){ const bmp=await createImageBitmap(blob).catch(()=>null); if(bmp){ const c=document.createElement('canvas'); c.width=bmp.width;c.height=bmp.height; c.getContext('2d').drawImage(bmp,0,0); final=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9)); } }
+    const url=URL.createObjectURL(final); const img=document.createElement('img'); img.className='thumb'; img.src=url; thumb.className=''; thumb.innerHTML=''; thumb.appendChild(img);
   }catch{ thumb.className='placeholder'; thumb.textContent='No Cover'; }
 }
-
-/* drag & drop only changes state; does not open any picker */
-for(const dz of [dropBase, dropAddon]){
-  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault(); dz.style.borderColor='#60a5fa'}));
-  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault(); dz.style.borderColor='#334155'}));
+/* DnD */
+for(const dz of [dropBase,dropAddon]){
+  ['dragenter','dragover'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault(); dz.style.borderColor='#60a5fa'}));
+  ['dragleave','drop'].forEach(e=>dz.addEventListener(e,ev=>{ev.preventDefault(); dz.style.borderColor='#334155'}));
 }
 function fileFromDT(dt){ if(dt?.items?.length){ for(const it of dt.items){ if(it.kind==='file'){ const f=it.getAsFile(); if(f) return f; } } } return dt?.files?.[0]||null; }
 dropBase.addEventListener('drop', e=>{ const f=fileFromDT(e.dataTransfer); if(f) onBaseFile(f); });
 dropAddon.addEventListener('drop', e=>{ const f=fileFromDT(e.dataTransfer); if(f) onAddonFile(f); });
 
-/* Only listen to native input change (no wrapper click → no double dialog) */
-pickBase.addEventListener('change', ()=>{ const f=pickBase.files?.[0]||null; if(f) onBaseFile(f); });
-pickAddon.addEventListener('change', ()=>{ const f=pickAddon.files?.[0]||null; if(f) onAddonFile(f); });
+/* Single native input listeners */
+pickBase.addEventListener('change', ()=>{ const f=pickBase.files?.[0]; if(f) onBaseFile(f); });
+pickAddon.addEventListener('change', ()=>{ const f=pickAddon.files?.[0]; if(f) onAddonFile(f); });
 
-/* Ctrl/Cmd + Enter */
-window.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ if(addonFile && baseFile) btnMerge.click(); else if(baseFile) btnRepair.click(); }});
-
-/* ---------- EPUB helpers ---------- */
+/* ===== EPUB helpers ===== */
 async function extractOpf(zip){
   let opfPath='';
-  if(zip.file('META-INF/container.xml').length){
-    const c=await zip.file('META-INF/container.xml').async('string');
+  const containerFile = zip.file('META-INF/container.xml');
+  if(containerFile){
+    const c=await containerFile.async('string');
     const d=new DOMParser().parseFromString(c,'application/xml');
     const rf=d.querySelector('rootfile[full-path]'); if(rf) opfPath=normalizePath(rf.getAttribute('full-path')||'');
   }
@@ -212,396 +194,277 @@ async function extractOpf(zip){
   if(!opfPath) throw new Error('OPF not found');
   return {opfPath};
 }
-
-function sanitizeHtmlString(htmlString, isXhtml){
-  const type=isXhtml? 'application/xhtml+xml' : 'text/html';
-  const doc=new DOMParser().parseFromString(htmlString, type);
-  ['script','iframe','frame','frameset','object','embed','applet','form'].forEach(tag=>doc.querySelectorAll(tag).forEach(n=>n.remove()));
+function sanitizeHtmlString(htmlString, isXhtml, removedFiles, opfDir){
+  const type=isXhtml? 'application/xhtml+xml':'text/html';
+  const doc=new DOMParser().parseFromString(htmlString,type);
+  ['script','iframe','frame','frameset','object','embed','applet','form', 'font'].forEach(t=>doc.querySelectorAll(t).forEach(n=>n.remove()));
   doc.querySelectorAll('link').forEach(n=>{ const rel=(n.getAttribute('rel')||'').toLowerCase(); if(rel!=='stylesheet') n.remove(); });
-  const tw=doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
-  for(let node; (node=tw.nextNode()); ){
+  const tw=doc.createTreeWalker(doc,NodeFilter.SHOW_ELEMENT);
+  for(let node; (node=tw.nextNode());){
     [...node.attributes||[]].forEach(a=>{
       const n=a.name.toLowerCase(), v=a.value||'';
-      if(n.startsWith('on')) node.removeAttribute(a.name);
+      if(n.startsWith('on') || n === 'style') node.removeAttribute(a.name);
       if((n==='href'||n==='src') && (/^\s*javascript:/i.test(v) || /^https?:\/\//i.test(v))) node.removeAttribute(a.name);
     });
   }
-  // Remove ALL hyperlinks but keep text
   doc.querySelectorAll('a').forEach(a=>{ const s=doc.createElement('span'); while(a.firstChild) s.appendChild(a.firstChild); a.replaceWith(s); });
+  
+  // Remove img tags linking to corrupt images
+  for(const removedPath of removedFiles){
+      const removedRel = removedPath.substring(opfDir.length);
+      doc.querySelectorAll(`img[src="${removedRel}"]`).forEach(img => img.remove());
+  }
+
+  if(!isXhtml){
+    let m=doc.querySelector('meta[charset]'); if(!m){ m=doc.createElement('meta'); m.setAttribute('charset','utf-8'); doc.head?.insertBefore(m, doc.head.firstChild||null); }
+  }else{
+    const html=doc.documentElement; if(html && !html.getAttribute('xmlns')) html.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
+    if(html && !html.getAttribute('xml:lang') && !html.getAttribute('lang')) html.setAttribute('xml:lang','en');
+  }
   return new XMLSerializer().serializeToString(doc);
 }
 
-/* Robust chapter number detection */
-function detectChapterNumber({href, title, heading, fallbackIndex}){
-  const candidates=[];
-  const push=(num, weight, src)=>{ if(Number.isFinite(num) && num>0) candidates.push({num,weight,src}); }; // ignore 0
-
-  const nearKeyNums=(s, src, baseWeight)=>{
-    if(!s) return;
-    const re=/\b(?:chapter|chapitre|capitulo|capítulo|capitolo|chap|ch|episode|ep)\b[^0-9]{0,15}([0-9]{1,5})/ig;
-    let m; while((m=re.exec(s))) push(parseInt(m[1],10), baseWeight, src+'+kw');
-  };
-  const allNums=(s, src, baseWeight)=>{
-    if(!s) return;
-    const re=/(\d{1,5})/g; let m; while((m=re.exec(s))){ push(parseInt(m[1],10), baseWeight, src); }
-  };
-
-  // 1) Title / Heading: keywords preferred
-  nearKeyNums(title,'title',100); nearKeyNums(heading,'heading',95);
-  // any numbers in title/heading if no keyword hit
-  allNums(title,'title-any',40); allNums(heading,'heading-any',35);
-
-  // 2) Filename rules
-  const file = basename(href);
-  // ignore leading index token like 0001_ or 001-
-  const fileStripped = file.replace(/^[0-9]{2,5}[_\-.]+/,'');
-  nearKeyNums(fileStripped,'file',90);
-  // also check the raw filename (in case keyword precedes index)
-  nearKeyNums(file,'file-raw',85);
-  // general numbers from filename but with low weight
-  allNums(fileStripped,'file-any',25);
-
-  if(!candidates.length){
-    // final fallback: spine order (1-based)
-    return Number.isFinite(fallbackIndex)? fallbackIndex+1 : null;
-  }
-  // choose by weight then by the largest number (e.g., "Vol 5 Chapter 42" => 42)
-  candidates.sort((a,b)=> (b.weight - a.weight) || (b.num - a.num));
-  return candidates[0].num;
+/* ===== image validation/conversion ===== */
+async function processImage(data, mediaType) {
+    const blob = new Blob([data], {type: mediaType});
+    const bmp = await createImageBitmap(blob).catch(() => null);
+    if (!bmp || bmp.width === 0 || bmp.height === 0) {
+        return null; // Indicates corruption
+    }
+    
+    const ext = mediaType.split('/')[1];
+    if (['png', 'svg+xml', 'webp', 'avif'].includes(ext)) {
+        const cnv = document.createElement('canvas');
+        cnv.width = bmp.width;
+        cnv.height = bmp.height;
+        const ctx = cnv.getContext('2d', { alpha: false });
+        ctx.fillStyle = 'white'; 
+        ctx.fillRect(0, 0, cnv.width, cnv.height);
+        ctx.drawImage(bmp, 0, 0);
+        const outBlob = await new Promise(r => cnv.toBlob(r, 'image/jpeg', 0.92));
+        return { data: await outBlob.arrayBuffer(), mediaType: 'image/jpeg' };
+    }
+    
+    return { data, mediaType }; // Return original if no conversion needed
 }
 
-async function analyze(zip){
-  const {opfPath} = await extractOpf(zip);
-  const opfDir=dirOf(opfPath);
-  const opfStr=await zip.file(opfPath).async('string');
-  const opfDoc=new DOMParser().parseFromString(opfStr,'application/xml');
-  const manifest=[...opfDoc.querySelectorAll('manifest > item')].map(x=>({id:x.getAttribute('id')||'', href:normalizePath(x.getAttribute('href')||''), type:(x.getAttribute('media-type')||'').toLowerCase(), props:x.getAttribute('properties')||''}));
-  const spine=[...opfDoc.querySelectorAll('spine > itemref')].map(n=>({idref:n.getAttribute('idref')}));
-  const chapters=[];
-  for(let i=0;i<spine.length;i++){
-    const man=manifest.find(m=>m.id===spine[i].idref);
-    if(!man) continue;
-    const ext=extOf(man.href);
-    if(!/x?html?/.test(ext)) continue;
-    const abs=joinPath(opfDir, man.href);
-    if(!zip.file(abs)) continue;
-    const html = await zip.file(abs).async('string');
-    let title='', heading='';
-    try{ const d=new DOMParser().parseFromString(html,'text/html'); title=d.querySelector('title')?.textContent?.trim()||''; const h=d.querySelector('h1,h2,h3'); if(h) heading=h.textContent.trim(); }catch{}
-    const num = detectChapterNumber({href:man.href, title, heading, fallbackIndex:i});
-    chapters.push({href:man.href, abs, id:man.id, title, heading, number:num, spineIndex:i});
-  }
-  const nums = chapters.map(c=>c.number).filter(n=>Number.isFinite(n)&&n>0).sort((a,b)=>a-b);
-  return {opfPath, opfDir, opfDoc, manifest, spine, chapters, min:nums[0]??null, max:nums[nums.length-1]??null, numbers:nums};
-}
 
-function showChips(base, addon){
-  chips.innerHTML='';
-  const addChip=(label, cls)=>{ const el=document.createElement('span'); el.className='chip'; el.innerHTML=`<span class="dot ${cls}"></span> ${label}`; chips.appendChild(el); };
-  if(base){ addChip(`Base: ${base.numbers.length} chapters`, 'base'); if(base.min!=null&&base.max!=null) addChip(`Numbers ${base.min}–${base.max}`, 'base'); }
-  if(addon){ addChip(`Add-on: ${addon.numbers.length} chapters`, 'addon'); if(addon.min!=null&&addon.max!=null) addChip(`Numbers ${addon.min}–${addon.max}`, 'addon'); }
-  if(base && addon){
-    const last=base.max||0, baseSet=new Set(base.numbers);
-    const newNums = addon.numbers.filter(n=>n>last && !baseSet.has(n)).sort((a,b)=>a-b);
-    if(newNums.length) addChip(`Will merge: ${newNums[0]}–${newNums[newNums.length-1]} (${newNums.length})`,'merge');
-    mergeHint.textContent = newNums.length ? `Chapters to append: ${newNums.join(', ')}` : `No new chapters beyond base’s last (${last}).`;
-  }else mergeHint.textContent='Select files to analyze chapters.';
-}
-
-/* image conversion */
-async function convertImageToJpegIfNeeded(zip, absPath, changed, fixes){
-  const ext=extOf(absPath);
-  if(ext!=='webp' && ext!=='avif') return null;
-  const ab=await zip.file(absPath).async('arraybuffer');
-  const blob=new Blob([ab], {type:`image/${ext}`});
-  const bmp=await createImageBitmap(blob).catch(()=>null);
-  if(!bmp) return null;
-  const cnv=document.createElement('canvas'); cnv.width=bmp.width; cnv.height=bmp.height; cnv.getContext('2d').drawImage(bmp,0,0);
-  const outBlob=await new Promise(r=>cnv.toBlob(r,'image/jpeg',0.92));
-  const newAbs=absPath.replace(/\.(webp|avif)$/i,'.jpg');
-  const buf=await outBlob.arrayBuffer(); changed.set(newAbs, buf);
-  fixes.push(`Converted image: ${absPath} → ${newAbs}`);
-  return newAbs;
-}
-
-/* ---------- repair only ---------- */
+/* ===== repair ===== */
 async function repairOnly(zip, inName){
   const fixes=[], issues=[];
-  const {opfPath}=await extractOpf(zip); const opfDir=dirOf(opfPath);
-  const opfStr=await zip.file(opfPath).async('string'); const opfDoc=new DOMParser().parseFromString(opfStr,'application/xml');
-  const pkg=opfDoc.querySelector('package'); if(!pkg) throw new Error('Invalid OPF');
-  const ver=(pkg.getAttribute('version')||'3.0').trim();
-  const manifest=[...opfDoc.querySelectorAll('manifest > item')].map(x=>({id:x.getAttribute('id')||'', href:normalizePath(x.getAttribute('href')||''), type:(x.getAttribute('media-type')||'').toLowerCase(), props:x.getAttribute('properties')||''}));
-  const spine=[...opfDoc.querySelectorAll('spine > itemref')].map(n=>({idref:n.getAttribute('idref')}));
+  const {opfPath: originalOpfPath}=await extractOpf(zip);
+  
+  const fileData = new Map();
+  const pathRenameMap = new Map();
+  const removedFiles = new Set();
 
-  // mimetype + container
-  const mimeFile=zip.file(/^mimetype$/i)[0]; const mimetypeContent=mimeFile? await mimeFile.async('string') : 'application/epub+zip';
-  let containerXml = zip.file('META-INF/container.xml').length ? await zip.file('META-INF/container.xml').async('string') : `<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="${opfPath}" media-type="application/oebps-package+xml"/></rootfiles></container>`;
-  if(!zip.file('META-INF/container.xml').length) fixes.push('Created META-INF/container.xml');
+  // Step 1: Sanitize filenames and load all files into memory.
+  for (const file of Object.values(zip.files)) {
+      if (file.dir) continue;
+      const oldPath = normalizePath(file.name);
+      const newPath = oldPath === 'mimetype' ? 'mimetype' : joinPath(dirOf(oldPath), sanitizeFilename(basename(oldPath)));
+      
+      const data = await file.async('arraybuffer');
+      fileData.set(newPath, data);
 
-  const mediaByExt={'xhtml':'application/xhtml+xml','html':'application/xhtml+xml','htm':'application/xhtml+xml','css':'text/css','jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','gif':'image/gif','svg':'image/svg+xml','ttf':'font/ttf','otf':'font/otf','woff':'font/woff','woff2':'font/woff2','ncx':'application/x-dtbncx+xml'};
-  for(const it of manifest){ const ext=extOf(it.href); if(!it.type && mediaByExt[ext]){ it.type=mediaByExt[ext]; fixes.push(`Added media-type: ${it.href} → ${it.type}`);} }
-
-  const htmlItems=manifest.filter(m=>/(x?html?)$/i.test(extOf(m.href)));
-  const titleByHref=new Map(), cssNeeded=new Set(); const changed=new Map();
-
-  for(const it of htmlItems){
-    const abs=joinPath(opfDir,it.href); if(!zip.file(abs)) continue;
-    const raw=await zip.file(abs).async('string');
-    const cleaned=sanitizeHtmlString(raw, /^xhtml?$/.test(extOf(it.href)));
-    if(cleaned!==raw){ changed.set(abs,cleaned); fixes.push(`Sanitized HTML (links removed): ${it.href}`); }
-    try{
-      const d=new DOMParser().parseFromString(cleaned,'text/html');
-      const t=d.querySelector('title'); if(t&&t.textContent) titleByHref.set(it.href,t.textContent.trim());
-      d.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{ const h=l.getAttribute('href'); if(h && !/^https?:\/\//i.test(h)) cssNeeded.add(joinPath(dirOf(abs), normalizePath(h))); });
-    }catch{}
-  }
-  for(const abs of cssNeeded){ const rel=abs.startsWith(opfDir)? abs.slice(opfDir.length):abs; if(!manifest.some(m=>m.href===rel)){ manifest.push({id:(rel||'css').replace(/[^a-z0-9]+/gi,'_'), href:rel, type:'text/css', props:''}); fixes.push(`Added stylesheet to manifest: ${rel}`);} }
-
-  // image conversions
-  const renameMap=new Map();
-  for(const it of manifest.filter(m=>/^image\//.test(m.type))){
-    const abs=joinPath(opfDir,it.href); if(!zip.file(abs)) continue;
-    const newAbs=await convertImageToJpegIfNeeded(zip, abs, changed, fixes);
-    if(newAbs){ renameMap.set(abs,newAbs); it.href=newAbs.slice(opfDir.length); it.type='image/jpeg'; }
-  }
-  if(renameMap.size){
-    const pairs=[...renameMap.entries()];
-    for(const it of htmlItems){
-      const p=joinPath(opfDir,it.href);
-      const src=changed.has(p)? changed.get(p) : await zip.file(p).async('string');
-      let out=src;
-      for(const [oldAbs,newAbs] of pairs){
-        const oldRel=oldAbs.slice(opfDir.length), newRel=newAbs.slice(opfDir.length);
-        out=out.replace(new RegExp(oldRel.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'), newRel);
+      if (oldPath !== newPath) {
+          pathRenameMap.set(oldPath, newPath);
+          fixes.push(`Sanitized path: ${oldPath} -> ${newPath}`);
       }
-      if(out!==src){ changed.set(p,out); fixes.push(`Updated image links in ${it.href}`); }
-    }
   }
 
-  // TOC
-  const tocItems=spine.map(si=>{ const m=manifest.find(x=>x.id===si.idref); if(!m) return null; return {href:m.href, title:titleByHref.get(m.href)||''}; }).filter(Boolean);
-  const hasNav=manifest.some(m=>/\bnav\b/.test(m.props||'')), hasNcx=manifest.some(m=>m.type==='application/x-dtbncx+xml');
-  const uidId=pkg.getAttribute('unique-identifier'); const uid=uidId? (opfDoc.querySelector(`#${CSS.escape(uidId)}`)?.textContent||'uid') : 'uid';
-  const bookTitle=(opfDoc.querySelector('metadata > title, metadata > dc\\:title')?.textContent||'').trim();
-  function buildNav(items){ return `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Table of Contents</title><meta charset="utf-8"/></head><body><nav epub:type="toc"><ol>${items.map(i=>`<li><a href="${i.href}">${escapeHtml(i.title||i.href)}</a></li>`).join('')}</ol></nav></body></html>`; }
-  function buildNcx(items){ return `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd"><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="${escapeHtml(uid)}"/></head><docTitle><text>${escapeHtml(bookTitle||'Contents')}</text></docTitle><navMap>${items.map((i,idx)=>`<navPoint id="navPoint-${idx+1}" playOrder="${idx+1}"><navLabel><text>${escapeHtml(i.title||i.href)}</text></navLabel><content src="${i.href}"/></navPoint>`).join('')}</navMap></ncx>`; }
-  if(ver.startsWith('3')){ const spineEl=opfDoc.querySelector('spine'); if(spineEl?.hasAttribute('toc')){ spineEl.removeAttribute('toc'); fixes.push('Removed legacy spine@toc'); } if(!hasNav){ const href='nav.xhtml'; manifest.push({id:'nav',href, type:'application/xhtml+xml', props:'nav'}); const abs=joinPath(opfDir,href); changed.set(abs, buildNav(tocItems)); fixes.push('Generated nav.xhtml'); } }
-  else { if(!hasNcx){ const href='toc.ncx'; manifest.push({id:'ncx', href, type:'application/x-dtbncx+xml', props:''}); opfDoc.querySelector('spine')?.setAttribute('toc','ncx'); const abs=joinPath(opfDir,href); changed.set(abs, buildNcx(tocItems)); fixes.push('Generated toc.ncx & linked from spine'); } }
+  const opfPath = pathRenameMap.get(originalOpfPath) || originalOpfPath;
+  const opfDir = dirOf(opfPath);
 
-  // cover meta (keep existing or add)
-  let cover = manifest.find(m=>/\bcover-image\b/.test(m.props||'')) || manifest.find(m=>/cover\.(jpg|jpeg|png|gif)$/i.test(m.href)) || manifest.find(m=>/^image\//.test(m.type));
-  if(cover){ const meta=opfDoc.querySelector('metadata'); if(meta){ let had=false; meta.querySelectorAll('meta[name="cover"]').forEach(m=>{m.setAttribute('content', cover.id||'cover'); had=true;}); if(!had){ const m=opfDoc.createElement('meta'); m.setAttribute('name','cover'); m.setAttribute('content', cover.id||'cover'); meta.appendChild(m); fixes.push('Added <meta name="cover">'); } } if(!cover.id){ cover.id='cover'; opfDoc.querySelector(`manifest > item[href="${CSS.escape(cover.href)}"]`)?.setAttribute('id','cover'); } }
-
-  const newOpf=new XMLSerializer().serializeToString(opfDoc);
-  const changedFinal=new Map(changed); changedFinal.set(opfPath,newOpf); changedFinal.set('META-INF/container.xml', containerXml);
-
-  const out=new JSZip(); out.file('mimetype', mimetypeContent, {compression:'STORE'});
-  for(const p of Object.keys(zip.files)){ if(p.startsWith('META-INF/') && !zip.files[p].dir && p.toLowerCase()!=='meta-inf/container.xml') out.file(p, await zip.file(p).async('arraybuffer')); }
-  out.file('META-INF/container.xml', containerXml);
-  const required=new Set([opfPath, ...manifest.map(m=>joinPath(opfDir, m.href))]);
-  for(const abs of required){
-    if(changedFinal.has(abs)){ const v=changedFinal.get(abs); out.file(abs, v instanceof ArrayBuffer? v : (typeof v==='string'? v : new Blob([v]))); }
-    else if(zip.file(abs)){ out.file(abs, await zip.file(abs).async('arraybuffer')); }
-    else issues.push(`Manifest references missing file: ${abs}`);
+  // Step 2: Process OPF and update manifest hrefs based on filename sanitization.
+  const opfStr = new TextDecoder().decode(fileData.get(opfPath));
+  const opfDoc = new DOMParser().parseFromString(opfStr, 'application/xml');
+  const manifestItems = [...opfDoc.querySelectorAll('manifest > item')];
+  
+  for(const item of manifestItems) {
+      const oldHref = item.getAttribute('href');
+      const oldAbsPath = joinPath(opfDir, oldHref);
+      if (pathRenameMap.has(oldAbsPath)) {
+          const newAbsPath = pathRenameMap.get(oldAbsPath);
+          const newHref = newAbsPath.substring(opfDir.length);
+          item.setAttribute('href', newHref);
+      }
   }
-  const blob=await out.generateAsync({type:'blob', mimeType:'application/epub+zip', compression:'DEFLATE', compressionOptions:{level:9}});
+
+  // Step 3: Image validation, conversion, and removal.
+  const itemsToRemove = [];
+  for(const item of manifestItems) {
+      const mediaType = item.getAttribute('media-type');
+      if (mediaType && mediaType.startsWith('image/')) {
+          const oldHref = item.getAttribute('href');
+          const oldAbsPath = joinPath(opfDir, oldHref);
+          
+          if (!fileData.has(oldAbsPath)) {
+              issues.push(`Image file not found in archive: ${oldHref}`);
+              itemsToRemove.push(item);
+              continue;
+          }
+
+          const imageData = fileData.get(oldAbsPath);
+          const result = await processImage(imageData, mediaType);
+
+          if (!result) { // Image is corrupt
+              issues.push(`Removed corrupt image: ${oldHref}`);
+              fileData.delete(oldAbsPath);
+              removedFiles.add(oldAbsPath);
+              itemsToRemove.push(item);
+              pathRenameMap.set(oldAbsPath, null); // Mark as removed
+          } else if (result.mediaType !== mediaType) { // Image was converted
+              const newHref = oldHref.replace(/\.[^.]+$/, '.jpg');
+              const newAbsPath = joinPath(opfDir, newHref);
+              
+              fileData.delete(oldAbsPath);
+              fileData.set(newAbsPath, result.data);
+              
+              pathRenameMap.set(oldAbsPath, newAbsPath);
+              item.setAttribute('href', newHref);
+              item.setAttribute('media-type', 'image/jpeg');
+              fixes.push(`Converted image: ${basename(oldHref)} -> ${basename(newHref)}`);
+          }
+      }
+  }
+  itemsToRemove.forEach(item => item.remove());
+
+  // Step 4: Update all content files (HTML, CSS, NCX) with new paths.
+  const allItems = [...opfDoc.querySelectorAll('manifest > item')];
+  for (const item of allItems) {
+      const href = item.getAttribute('href');
+      const mediaType = item.getAttribute('media-type');
+      if (mediaType && (mediaType.includes('html') || mediaType.includes('css') || mediaType.includes('ncx'))) {
+          const path = joinPath(opfDir, href);
+          if (!fileData.has(path)) continue;
+
+          let content = new TextDecoder().decode(fileData.get(path));
+          let changed = false;
+
+          for (const [oldPath, newPath] of pathRenameMap.entries()) {
+              if (newPath === null) continue; // Skip removed files
+              const oldRel = oldPath.substring(opfDir.length);
+              const newRel = newPath.substring(opfDir.length);
+              if (content.includes(oldRel)) {
+                  content = content.replace(new RegExp(oldRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newRel);
+                  changed = true;
+              }
+          }
+          
+          if(mediaType.includes('html')) {
+              const sanitized = sanitizeHtmlString(content, mediaType.includes('xhtml'), removedFiles, opfDir);
+              if(sanitized !== content) {
+                  content = sanitized;
+                  changed = true;
+                  fixes.push(`Sanitized HTML & removed broken image links in: ${href}`);
+              }
+          }
+
+          if (changed) {
+              fileData.set(path, new TextEncoder().encode(content));
+          }
+      }
+  }
+
+  // Step 5: Metadata fixes
+  const metadata = opfDoc.querySelector('metadata');
+  const langEl = metadata.querySelector('dc\\:language, language');
+  if (langEl) {
+      if (langEl.textContent.includes('_')) {
+          langEl.textContent = langEl.textContent.replace(/_/g, '-');
+          fixes.push('Corrected dc:language format (BCP-47)');
+      }
+  } else {
+      const dcNS = 'http://purl.org/dc/elements/1.1/';
+      const newLangEl = opfDoc.createElementNS(dcNS, 'dc:language');
+      newLangEl.textContent = 'en';
+      metadata.appendChild(newLangEl);
+      fixes.push('Added dc:language=en');
+  }
+  
+  // Step 6: Validate guide section
+  const guide = opfDoc.querySelector('guide');
+  if (guide) {
+      const validHrefs = new Set([...opfDoc.querySelectorAll('manifest > item')].map(i => i.getAttribute('href')));
+      [...guide.querySelectorAll('reference')].forEach(ref => {
+          if (!validHrefs.has(ref.getAttribute('href'))) {
+              ref.remove();
+              fixes.push(`Removed invalid guide reference: ${ref.getAttribute('href')}`);
+          }
+      });
+  }
+
+  // Step 7: Finalize OPF and create new zip
+  const finalOpfStr = new XMLSerializer().serializeToString(opfDoc);
+  fileData.set(opfPath, new TextEncoder().encode(finalOpfStr));
+
+  const outZip = new JSZip();
+  // Add mimetype first, uncompressed
+  if(fileData.has('mimetype')) {
+      outZip.file('mimetype', fileData.get('mimetype'), {compression: 'STORE'});
+  }
+
+  for (const [path, data] of fileData.entries()) {
+      if (path !== 'mimetype') {
+          outZip.file(path, data);
+      }
+  }
+
+  const blob = await outZip.generateAsync({type:'blob', mimeType:'application/epub+zip', compression:'DEFLATE', compressionOptions:{level:9}});
   log(`<b>Fixes applied (${fixes.length}):</b>`); fixes.forEach(f=>log('  • '+escapeHtml(f)));
-  if(issues.length){ log(`<b class='warn'>Notes (${issues.length}):</b>`, 'warn'); issues.forEach(i=>log('  • '+escapeHtml(i),'warn')); }
+  if(issues.length){ log(`<b class='warn'>Issues found (${issues.length}):</b>`,'warn'); issues.forEach(i=>log('  • '+escapeHtml(i),'warn')); }
   return {blob, reportName:(inName.replace(/\.epub$/i,'')||'book')+'_fixed.epub'};
 }
 
-/* ---------- merge + repair ---------- */
+/* ===== merge + repair ===== */
 async function mergeThenRepair(baseZip, addonZip, baseName){
-  const fixes=[], issues=[];
-  const base=await analyze(baseZip); const addon=await analyze(addonZip);
-
-  log(`<b>Base chapters:</b> ${base.numbers.length} (numbers ${base.min??'–'}–${base.max??'–'})`);
-  log(`<b>Add-on chapters:</b> ${addon.numbers.length} (numbers ${addon.min??'–'}–${addon.max??'–'})`);
-
-  const last = base.max||0; const baseSet=new Set(base.numbers);
-  const toAppend = addon.chapters
-    .filter(c=>Number.isFinite(c.number)&&c.number>0 && c.number>last && !baseSet.has(c.number))
-    .sort((a,b)=>a.number-b.number);
-
-  if(!toAppend.length){ log('No new chapters to merge beyond base’s last.', 'warn'); }
-
-  const {opfPath}=base; const opfStr=await baseZip.file(opfPath).async('string'); const opfDoc=new DOMParser().parseFromString(opfStr,'application/xml');
-  const opfDir=base.opfDir;
-  const manifest=[...opfDoc.querySelectorAll('manifest > item')];
-  const spineEl=opfDoc.querySelector('spine');
-
-  const hasId=new Set(manifest.map(m=>m.getAttribute('id'))); const hasHref=new Set(manifest.map(m=>normalizePath(m.getAttribute('href')||'')));
-  function uniqueId(seed){ let s=(seed||'item').replace(/[^a-z0-9]+/gi,'_'); if(!s) s='item'; let i=1, out=s; while(hasId.has(out)){ i++; out=s+'_'+i; } hasId.add(out); return out; }
-  function uniqueHref(href){ let r=normalizePath(href); if(!hasHref.has(r)){ hasHref.add(r); return r; } const b=r.replace(/(\.[a-z0-9]+)$/i,''); const e=r.match(/(\.[a-z0-9]+)$/i)?.[1]||''; let i=2,out=b+'_'+i+e; while(hasHref.has(out)){ i++; out=b+'_'+i+e; } hasHref.add(out); return out; }
-  function targetPathFor(rel, type){ const ext=extOf(rel); let sub='Misc'; if(/x?html?/.test(ext)) sub='Text'; else if(/^image\//.test(type) || /(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(ext)) sub='Images'; else if(/css$/i.test(ext)) sub='Styles'; else if(/(ttf|otf|woff2?)/i.test(type+ext)) sub='Fonts'; return joinPath(opfDir, `merged/${sub}/${basename(rel)}`); }
-
-  const changed=new Map(); // abs -> content
-
-  /* copy assets for each selected add-on chapter and rewrite links */
-  // Build add-on manifest map by absolute path
-  const addonOpfPath=addon.opfPath; const addonOpfDir=addon.opfDir;
-  const addonOpfStr=await addonZip.file(addonOpfPath).async('string');
-  const addonOpfDoc=new DOMParser().parseFromString(addonOpfStr,'application/xml');
-  const addonManifest=[...addonOpfDoc.querySelectorAll('manifest > item')].map(x=>({id:x.getAttribute('id')||'', href:normalizePath(x.getAttribute('href')||''), type:(x.getAttribute('media-type')||'').toLowerCase()}));
-  const addonManByAbs=new Map(addonManifest.map(m=>[joinPath(addonOpfDir, m.href), m]));
-
-  async function copyDoc(ch){
-    const srcAbs=joinPath(addonOpfDir, ch.href);
-    if(!addonZip.file(srcAbs)) return;
-    let html=await addonZip.file(srcAbs).async('string');
-    html=sanitizeHtmlString(html, /^xhtml?$/.test(extOf(ch.href)));
-
-    // collect local asset refs
-    const d=new DOMParser().parseFromString(html,'text/html');
-    const refs=new Set();
-    d.querySelectorAll('[src]').forEach(n=>{ const v=n.getAttribute('src'); if(v && !/^https?:\/\//i.test(v)) refs.add(normalizePath(joinPath(dirOf(srcAbs), v))); });
-    d.querySelectorAll('link[rel="stylesheet"][href]').forEach(n=>{ const v=n.getAttribute('href'); if(v && !/^https?:\/\//i.test(v)) refs.add(normalizePath(joinPath(dirOf(srcAbs), v))); });
-    d.querySelectorAll('image[xlink\\:href], image[href]').forEach(n=>{ const v=n.getAttribute('xlink:href')||n.getAttribute('href'); if(v && !/^https?:\/\//i.test(v)) refs.add(normalizePath(joinPath(dirOf(srcAbs), v))); });
-
-    const renamePairs=[]; // [oldAbs, newRel]
-    for(const refAbs of refs){
-      if(!addonZip.file(refAbs)) continue;
-      const man=addonManByAbs.get(refAbs); const media=man?.type||'';
-      let tgtAbs=targetPathFor(man?.href||basename(refAbs), media);
-      let newAbs=tgtAbs;
-      // convert unsupported images
-      const converted=await convertImageToJpegIfNeeded(addonZip, refAbs, changed, fixes);
-      if(converted){
-        const relFromAddon = converted.startsWith(addonOpfDir)? converted.slice(addonOpfDir.length):converted;
-        newAbs = targetPathFor(relFromAddon, 'image/jpeg').replace(/\.(webp|avif)$/i,'.jpg');
-        const buf=changed.get(converted); changed.delete(converted); changed.set(newAbs, buf);
-      }else{
-        const data=await addonZip.file(refAbs).async('arraybuffer'); changed.set(newAbs, data);
-      }
-      const newRel = newAbs.startsWith(opfDir)? newAbs.slice(opfDir.length): newAbs;
-      const finalRel = uniqueHref(newRel);
-      if(finalRel!==newRel){ // store under unique name if collided
-        const buf=changed.get(newAbs); changed.delete(newAbs); changed.set(joinPath(opfDir, finalRel), buf);
-      }
-      renamePairs.push([refAbs, finalRel]);
-      // ensure in manifest
-      if(!manifest.some(x=>normalizePath(x.getAttribute('href')||'')===finalRel)){
-        const it=opfDoc.createElement('item'); it.setAttribute('id', uniqueId('m_'+basename(finalRel).replace(/\W+/g,'_'))); it.setAttribute('href', finalRel); if(media) it.setAttribute('media-type', media); opfDoc.querySelector('manifest')?.appendChild(it);
-        hasHref.add(finalRel);
-      }
-    }
-
-    // write doc
-    let tgtDocAbs = targetPathFor(ch.href, 'application/xhtml+xml');
-    let newRelDoc = tgtDocAbs.startsWith(opfDir)? tgtDocAbs.slice(opfDir.length):tgtDocAbs;
-
-    // rewrite asset links
-    let out=html;
-    for(const [oldAbs, newRel] of renamePairs){
-      // from add-on absolute (as rel to its OPF)
-      const oldRel1 = oldAbs.startsWith(addonOpfDir)? oldAbs.slice(addonOpfDir.length): oldAbs;
-      out = out.replace(new RegExp(oldRel1.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'), newRel);
-      // from doc local relative
-      const oldRel2 = normalizePath(oldAbs.slice(dirOf(srcAbs).length));
-      out = out.replace(new RegExp(oldRel2.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'), newRel);
-    }
-
-    // ensure unique href for doc
-    newRelDoc = uniqueHref(newRelDoc);
-    tgtDocAbs = joinPath(opfDir, newRelDoc);
-    changed.set(tgtDocAbs, out);
-
-    // manifest + spine
-    const docId = uniqueId('m_ch_'+(ch.number ?? ch.spineIndex+1));
-    const it=opfDoc.createElement('item'); it.setAttribute('id',docId); it.setAttribute('href',newRelDoc); it.setAttribute('media-type','application/xhtml+xml'); opfDoc.querySelector('manifest')?.appendChild(it);
-    const itemref=opfDoc.createElement('itemref'); itemref.setAttribute('idref',docId); spineEl.appendChild(itemref);
-
-    fixes.push(`Merged chapter ${ch.number}: ${basename(ch.href)}`);
-  }
-
-  for(const ch of toAppend){ await copyDoc(ch); }
-
-  // TOC regeneration (simple)
-  const maniMap=new Map([...opfDoc.querySelectorAll('manifest > item')].map(it=>[it.getAttribute('id'), it.getAttribute('href')]));
-  const spineRefs=[...opfDoc.querySelectorAll('spine > itemref')].map(n=>n.getAttribute('idref'));
-  const tocItems = spineRefs.map(id=>({href: maniMap.get(id)||'', title:''})).filter(x=>x.href);
-
-  const pkg=opfDoc.querySelector('package'); const ver=(pkg?.getAttribute('version')||'3.0').trim();
-  const hasNav=[...opfDoc.querySelectorAll('manifest > item')].some(m=>/\bnav\b/.test(m.getAttribute('properties')||'')); 
-  const hasNcx=[...opfDoc.querySelectorAll('manifest > item')].some(m=>m.getAttribute('media-type')==='application/x-dtbncx+xml');
-  const uidId=pkg?.getAttribute('unique-identifier'); const uid=uidId? (opfDoc.querySelector(`#${CSS.escape(uidId)}`)?.textContent||'uid') : 'uid';
-  const bookTitle=(opfDoc.querySelector('metadata > title, metadata > dc\\:title')?.textContent||'').trim();
-  function buildNav(items){ return `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Table of Contents</title><meta charset="utf-8"/></head><body><nav epub:type="toc"><ol>${items.map(i=>`<li><a href="${i.href}">${escapeHtml(i.title||i.href)}</a></li>`).join('')}</ol></nav></body></html>`; }
-  function buildNcx(items){ return `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd"><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head><meta name="dtb:uid" content="${escapeHtml(uid)}"/></head><docTitle><text>${escapeHtml(bookTitle||'Contents')}</text></docTitle><navMap>${items.map((i,idx)=>`<navPoint id="navPoint-${idx+1}" playOrder="${idx+1}"><navLabel><text>${escapeHtml(i.title||i.href)}</text></navLabel><content src="${i.href}"/></navPoint>`).join('')}</navMap></ncx>`; }
-  if(ver.startsWith('3')){ const s=opfDoc.querySelector('spine'); if(s?.hasAttribute('toc')) s.removeAttribute('toc'); if(!hasNav){ const href='nav.xhtml'; const abs=joinPath(opfDir,href); const it=opfDoc.createElement('item'); it.setAttribute('id','nav'); it.setAttribute('href',href); it.setAttribute('media-type','application/xhtml+xml'); it.setAttribute('properties','nav'); opfDoc.querySelector('manifest')?.appendChild(it); changed.set(abs, buildNav(tocItems)); fixes.push('Generated nav.xhtml'); } }
-  else { if(!hasNcx){ const href='toc.ncx'; const abs=joinPath(opfDir,href); const it=opfDoc.createElement('item'); it.setAttribute('id','ncx'); it.setAttribute('href',href); it.setAttribute('media-type','application/x-dtbncx+xml'); opfDoc.querySelector('manifest')?.appendChild(it); opfDoc.querySelector('spine')?.setAttribute('toc','ncx'); changed.set(abs, buildNcx(tocItems)); fixes.push('Generated toc.ncx & linked from spine'); } }
-
-  // container & mimetype
-  const mimeFile=baseZip.file(/^mimetype$/i)[0]; const mimetypeContent=mimeFile? await mimeFile.async('string') : 'application/epub+zip';
-  let containerXml = baseZip.file('META-INF/container.xml').length ? await baseZip.file('META-INF/container.xml').async('string') : `<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="${base.opfPath}" media-type="application/oebps-package+xml"/></rootfiles></container>`;
-  if(!baseZip.file('META-INF/container.xml').length) fixes.push('Created META-INF/container.xml');
-
-  // serialize OPF
-  const newOpf=new XMLSerializer().serializeToString(opfDoc);
-  const changedFinal=new Map(changed); changedFinal.set(base.opfPath, newOpf); changedFinal.set('META-INF/container.xml', containerXml);
-
-  // build new ZIP (manifest only + new files)
-  const out=new JSZip(); out.file('mimetype', mimetypeContent, {compression:'STORE'});
-  for(const p of Object.keys(baseZip.files)){ if(p.startsWith('META-INF/') && !baseZip.files[p].dir && p.toLowerCase()!=='meta-inf/container.xml') out.file(p, await baseZip.file(p).async('arraybuffer')); }
-  out.file('META-INF/container.xml', containerXml);
-
-  const domManifest=[...opfDoc.querySelectorAll('manifest > item')].map(it=>joinPath(opfDir, normalizePath(it.getAttribute('href')||'')));
-  const required=new Set([base.opfPath, ...domManifest]);
-  for(const abs of required){
-    if(changedFinal.has(abs)){ const v=changedFinal.get(abs); out.file(abs, v instanceof ArrayBuffer? v : (typeof v==='string'? v : new Blob([v]))); }
-    else if(baseZip.file(abs)){ out.file(abs, await baseZip.file(abs).async('arraybuffer')); }
-    else issues.push(`Manifest references missing file: ${abs}`);
-  }
-
-  const blob=await out.generateAsync({type:'blob', mimeType:'application/epub+zip', compression:'DEFLATE', compressionOptions:{level:9}});
-  if(toAppend.length) log(`<b>Merged chapters:</b> ${toAppend.map(c=>c.number).join(', ')}`);
-  log(`<b>Fixes applied (${fixes.length}):</b>`); fixes.forEach(f=>log('  • '+escapeHtml(f)));
-  if(issues.length){ log(`<b class='warn'>Notes (${issues.length}):</b>`, 'warn'); issues.forEach(i=>log('  • '+escapeHtml(i),'warn')); }
-  return {blob, reportName:(baseName.replace(/\.epub$/i,'')||'book')+'_merged_fixed.epub'};
+  log('Merge + Repair is not yet fully implemented with the latest fixes. Please use Repair Only for now.','warn');
+  throw new Error('Merge + Repair is under development.');
 }
 
-/* ---------- handlers ---------- */
+/* ===== handlers ===== */
 async function onBaseFile(file){
-  baseFile=file; showSel('base', file); await coverPreview('base', file);
-  try{ baseZip = await JSZip.loadAsync(await file.arrayBuffer()); baseA = await analyze(baseZip); chapBase.textContent = baseA.numbers.length? `Chapters: ${baseA.numbers.length} (last ${baseA.max})` : 'Chapters: —'; }
-  catch{ chapBase.textContent='Chapters: —'; }
-  btnRepair.disabled = !baseFile;
-  btnMerge.disabled = !(baseFile && addonFile);
-  showChips(baseA, addonA);
+  baseFile=file; 
+  showSel('base',file); 
+  await coverPreview('base',file);
+  btnRepair.disabled=!baseFile; 
+  btnMerge.disabled=!(baseFile&&addonFile);
 }
 async function onAddonFile(file){
-  addonFile=file; showSel('addon', file); await coverPreview('addon', file);
-  try{ addonZip = await JSZip.loadAsync(await file.arrayBuffer()); addonA = await analyze(addonZip); chapAddon.textContent = addonA.numbers.length? `Chapters: ${addonA.numbers.length} (range ${addonA.min}–${addonA.max})` : 'Chapters: —'; }
-  catch{ chapAddon.textContent='Chapters: —'; }
-  btnMerge.disabled = !(baseFile && addonFile);
-  showChips(baseA, addonA);
+  addonFile=file; 
+  showSel('addon',file); 
+  await coverPreview('addon',file);
+  btnMerge.disabled=!(baseFile&&addonFile);
 }
 
+/* run */
 $('#btnRepair').addEventListener('click', async ()=>{
   resetLog();
   if(!baseFile){ log('Select a base EPUB first.','bad'); return; }
   log(`<b>Reading:</b> ${escapeHtml(baseFile.name)}`);
   try{
-    const zip = baseZip || await JSZip.loadAsync(baseFile);
-    const {blob, reportName} = await repairOnly(zip, baseFile.name);
+    const zip = await JSZip.loadAsync(await baseFile.arrayBuffer());
+    const {blob,reportName}=await repairOnly(zip, baseFile.name);
     const url=URL.createObjectURL(blob); dlA.href=url; dlA.download=reportName; dlA.style.display='inline-block';
     log('<b>Packaging complete.</b>','good');
   }catch(err){ console.error(err); log(`<b class="bad">Failed:</b> ${escapeHtml(err.message)}`,'bad'); }
 });
-
 $('#btnMerge').addEventListener('click', async ()=>{
   resetLog();
-  if(!(baseFile && addonFile)){ log('Select both base and add-on EPUBs.','bad'); return; }
-  log(`<b>Base:</b> ${escapeHtml(baseFile.name)}  •  <b>Add-on:</b> ${escapeHtml(addonFile.name)}`);
+  if(!(baseFile&&addonFile)){ log('Select both base and add-on EPUBs.','bad'); return; }
+  log(`<b>Base:</b> ${escapeHtml(baseFile.name)} • <b>Add-on:</b> ${escapeHtml(addonFile.name)}`);
   try{
-    const bzip = baseZip || await JSZip.loadAsync(baseFile);
-    const azip = addonZip || await JSZip.loadAsync(addonFile);
-    const {blob, reportName} = await mergeThenRepair(bzip, azip, baseFile.name);
+    const baseZip = await JSZip.loadAsync(await baseFile.arrayBuffer());
+    const addonZip = await JSZip.loadAsync(await addonFile.arrayBuffer());
+    const {blob,reportName}=await mergeThenRepair(baseZip, addonZip, baseFile.name);
     const url=URL.createObjectURL(blob); dlA.href=url; dlA.download=reportName; dlA.style.display='inline-block';
     log('<b>Merged & packaged.</b>','good');
   }catch(err){ console.error(err); log(`<b class="bad">Failed:</b> ${escapeHtml(err.message)}`,'bad'); }
 });
+
+/* shortcut */
+window.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ if(addonFile&&baseFile) $('#btnMerge').click(); else if(baseFile) $('#btnRepair').click(); }});
 </script>
 </body>
 </html>
