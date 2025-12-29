@@ -194,34 +194,102 @@ async function extractOpf(zip){
   if(!opfPath) throw new Error('OPF not found');
   return {opfPath};
 }
+
 function sanitizeHtmlString(htmlString, isXhtml, removedFiles, opfDir){
-  const type=isXhtml? 'application/xhtml+xml':'text/html';
-  const doc=new DOMParser().parseFromString(htmlString,type);
-  ['script','iframe','frame','frameset','object','embed','applet','form', 'font'].forEach(t=>doc.querySelectorAll(t).forEach(n=>n.remove()));
-  doc.querySelectorAll('link').forEach(n=>{ const rel=(n.getAttribute('rel')||'').toLowerCase(); if(rel!=='stylesheet') n.remove(); });
-  const tw=doc.createTreeWalker(doc,NodeFilter.SHOW_ELEMENT);
-  for(let node; (node=tw.nextNode());){
-    [...node.attributes||[]].forEach(a=>{
-      const n=a.name.toLowerCase(), v=a.value||'';
-      if(n.startsWith('on') || n === 'style') node.removeAttribute(a.name);
-      if((n==='href'||n==='src') && (/^\s*javascript:/i.test(v) || /^https?:\/\//i.test(v))) node.removeAttribute(a.name);
-    });
-  }
-  doc.querySelectorAll('a').forEach(a=>{ const s=doc.createElement('span'); while(a.firstChild) s.appendChild(a.firstChild); a.replaceWith(s); });
-  
-  // Remove img tags linking to corrupt images
-  for(const removedPath of removedFiles){
-      const removedRel = removedPath.substring(opfDir.length);
-      doc.querySelectorAll(`img[src="${removedRel}"]`).forEach(img => img.remove());
+  const type = isXhtml ? 'application/xhtml+xml' : 'text/html';
+  const doc = new DOMParser().parseFromString(htmlString, type);
+
+  // Stats for aggregated reporting (avoid spamming the log for multi-chapter books)
+  const stats = {
+    removedDoctype: false,
+    removedDuplicateIds: 0,
+    removedAnchors: 0,
+    removedUnsafeAttrs: 0
+  };
+
+  // Some ingestion pipelines use hardened XML parsers that reject or ignore DTDs/DOCTYPEs.
+  // Removing the DOCTYPE makes the XHTML more portable across strict readers.
+  if (doc.doctype) {
+    stats.removedDoctype = true;
+    try { doc.removeChild(doc.doctype); } catch(e) { try { doc.doctype.remove(); } catch(_) {} }
   }
 
-  if(!isXhtml){
-    let m=doc.querySelector('meta[charset]'); if(!m){ m=doc.createElement('meta'); m.setAttribute('charset','utf-8'); doc.head?.insertBefore(m, doc.head.firstChild||null); }
-  }else{
-    const html=doc.documentElement; if(html && !html.getAttribute('xmlns')) html.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
-    if(html && !html.getAttribute('xml:lang') && !html.getAttribute('lang')) html.setAttribute('xml:lang','en');
+  // Remove potentially unsafe/unsupported elements
+  ['script','iframe','frame','frameset','object','embed','applet','form','font']
+    .forEach(t => doc.querySelectorAll(t).forEach(n => n.remove()));
+
+  // Keep only stylesheet <link> tags
+  doc.querySelectorAll('link').forEach(n => {
+    const rel = (n.getAttribute('rel') || '').toLowerCase();
+    if (rel !== 'stylesheet') n.remove();
+  });
+
+  // Strip event handlers / inline styles / unsafe URLs
+  const tw = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
+  for (let node; (node = tw.nextNode());) {
+    [...node.attributes || []].forEach(a => {
+      const n = a.name.toLowerCase();
+      const v = a.value || '';
+      if (n.startsWith('on') || n === 'style') {
+        node.removeAttribute(a.name);
+        stats.removedUnsafeAttrs++;
+      }
+      if ((n === 'href' || n === 'src') && (/^\s*javascript:/i.test(v) || /^https?:\/\//i.test(v))) {
+        node.removeAttribute(a.name);
+        stats.removedUnsafeAttrs++;
+      }
+      // Common lazy-load / responsive patterns that can leave remote resources behind
+      if (n === 'srcset' && /^\s*https?:\/\//i.test(v)) {
+        node.removeAttribute(a.name);
+        stats.removedUnsafeAttrs++;
+      }
+    });
   }
-  return new XMLSerializer().serializeToString(doc);
+
+  // Replace <a> with <span> (avoids broken/unsafe links and some validator issues)
+  const anchors = [...doc.querySelectorAll('a')];
+  stats.removedAnchors = anchors.length;
+  anchors.forEach(a => {
+    const s = doc.createElement('span');
+    while (a.firstChild) s.appendChild(a.firstChild);
+    a.replaceWith(s);
+  });
+
+  // Remove img tags linking to corrupt/removed images
+  for (const removedPath of removedFiles) {
+    const removedRel = removedPath.substring(opfDir.length);
+    doc.querySelectorAll(`img[src="${removedRel}"]`).forEach(img => img.remove());
+  }
+
+  // Ensure basic encoding/lang/namespace
+  if (!isXhtml) {
+    let m = doc.querySelector('meta[charset]');
+    if (!m) {
+      m = doc.createElement('meta');
+      m.setAttribute('charset', 'utf-8');
+      doc.head?.insertBefore(m, doc.head.firstChild || null);
+    }
+  } else {
+    const html = doc.documentElement;
+    if (html && !html.getAttribute('xmlns')) html.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+    if (html && !html.getAttribute('xml:lang') && !html.getAttribute('lang')) html.setAttribute('xml:lang', 'en');
+  }
+
+  // Fix duplicate IDs (XHTML/HTML require ids be unique within a document).
+  // Google Play Books ingestion is strict about EPUBCheck-like errors such as duplicate IDs.
+  const seenIds = new Set();
+  doc.querySelectorAll('[id]').forEach(el => {
+    const id = (el.getAttribute('id') || '').trim();
+    if (!id) { el.removeAttribute('id'); return; }
+    if (seenIds.has(id)) {
+      el.removeAttribute('id');
+      stats.removedDuplicateIds++;
+    } else {
+      seenIds.add(id);
+    }
+  });
+
+  return { text: new XMLSerializer().serializeToString(doc), stats };
 }
 
 /* ===== image validation/conversion ===== */
@@ -231,39 +299,45 @@ async function processImage(data, mediaType) {
     if (!bmp || bmp.width === 0 || bmp.height === 0) {
         return null; // Indicates corruption
     }
-    
+
     const ext = mediaType.split('/')[1];
     if (['png', 'svg+xml', 'webp', 'avif'].includes(ext)) {
         const cnv = document.createElement('canvas');
         cnv.width = bmp.width;
         cnv.height = bmp.height;
         const ctx = cnv.getContext('2d', { alpha: false });
-        ctx.fillStyle = 'white'; 
+        ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, cnv.width, cnv.height);
         ctx.drawImage(bmp, 0, 0);
         const outBlob = await new Promise(r => cnv.toBlob(r, 'image/jpeg', 0.92));
         return { data: await outBlob.arrayBuffer(), mediaType: 'image/jpeg' };
     }
-    
+
     return { data, mediaType }; // Return original if no conversion needed
 }
-
 
 /* ===== repair ===== */
 async function repairOnly(zip, inName){
   const fixes=[], issues=[];
   const {opfPath: originalOpfPath}=await extractOpf(zip);
-  
+
   const fileData = new Map();
   const pathRenameMap = new Map();
   const removedFiles = new Set();
+
+  // Aggregated stats for content sanitization
+  let htmlSanitizedCount = 0;
+  let doctypeRemovedCount = 0;
+  let dupIdsRemovedTotal = 0;
+  let unsafeAttrsRemovedTotal = 0;
+  let anchorsRemovedTotal = 0;
 
   // Step 1: Sanitize filenames and load all files into memory.
   for (const file of Object.values(zip.files)) {
       if (file.dir) continue;
       const oldPath = normalizePath(file.name);
       const newPath = oldPath === 'mimetype' ? 'mimetype' : joinPath(dirOf(oldPath), sanitizeFilename(basename(oldPath)));
-      
+
       const data = await file.async('arraybuffer');
       fileData.set(newPath, data);
 
@@ -280,7 +354,7 @@ async function repairOnly(zip, inName){
   const opfStr = new TextDecoder().decode(fileData.get(opfPath));
   const opfDoc = new DOMParser().parseFromString(opfStr, 'application/xml');
   const manifestItems = [...opfDoc.querySelectorAll('manifest > item')];
-  
+
   for(const item of manifestItems) {
       const oldHref = item.getAttribute('href');
       const oldAbsPath = joinPath(opfDir, oldHref);
@@ -298,7 +372,7 @@ async function repairOnly(zip, inName){
       if (mediaType && mediaType.startsWith('image/')) {
           const oldHref = item.getAttribute('href');
           const oldAbsPath = joinPath(opfDir, oldHref);
-          
+
           if (!fileData.has(oldAbsPath)) {
               issues.push(`Image file not found in archive: ${oldHref}`);
               itemsToRemove.push(item);
@@ -317,10 +391,10 @@ async function repairOnly(zip, inName){
           } else if (result.mediaType !== mediaType) { // Image was converted
               const newHref = oldHref.replace(/\.[^.]+$/, '.jpg');
               const newAbsPath = joinPath(opfDir, newHref);
-              
+
               fileData.delete(oldAbsPath);
               fileData.set(newAbsPath, result.data);
-              
+
               pathRenameMap.set(oldAbsPath, newAbsPath);
               item.setAttribute('href', newHref);
               item.setAttribute('media-type', 'image/jpeg');
@@ -351,14 +425,18 @@ async function repairOnly(zip, inName){
                   changed = true;
               }
           }
-          
+
           if(mediaType.includes('html')) {
-              const sanitized = sanitizeHtmlString(content, mediaType.includes('xhtml'), removedFiles, opfDir);
-              if(sanitized !== content) {
-                  content = sanitized;
+              const res = sanitizeHtmlString(content, mediaType.includes('xhtml'), removedFiles, opfDir);
+              if (res.text !== content) {
+                  content = res.text;
                   changed = true;
-                  fixes.push(`Sanitized HTML & removed broken image links in: ${href}`);
+                  htmlSanitizedCount++;
               }
+              dupIdsRemovedTotal += res.stats.removedDuplicateIds || 0;
+              unsafeAttrsRemovedTotal += res.stats.removedUnsafeAttrs || 0;
+              anchorsRemovedTotal += res.stats.removedAnchors || 0;
+              if (res.stats.removedDoctype) doctypeRemovedCount++;
           }
 
           if (changed) {
@@ -366,6 +444,13 @@ async function repairOnly(zip, inName){
           }
       }
   }
+
+  // Step 4 summary: keep the log readable for large books
+  if (htmlSanitizedCount) fixes.push(`Sanitized ${htmlSanitizedCount} HTML/XHTML file(s)`);
+  if (anchorsRemovedTotal) fixes.push(`Removed ${anchorsRemovedTotal} <a> tag(s) (converted to <span>)`);
+  if (unsafeAttrsRemovedTotal) fixes.push(`Removed ${unsafeAttrsRemovedTotal} unsafe attribute(s) (event handlers, inline styles, remote href/src/srcset)`);
+  if (dupIdsRemovedTotal) fixes.push(`Removed ${dupIdsRemovedTotal} duplicate id attribute(s) (fixes EPUB/XHTML validity)`);
+  if (doctypeRemovedCount) fixes.push(`Removed DOCTYPE declarations from ${doctypeRemovedCount} XHTML file(s)`);
 
   // Step 5: Metadata fixes
   const metadata = opfDoc.querySelector('metadata');
@@ -382,7 +467,7 @@ async function repairOnly(zip, inName){
       metadata.appendChild(newLangEl);
       fixes.push('Added dc:language=en');
   }
-  
+
   // Step 6: Validate guide section
   const guide = opfDoc.querySelector('guide');
   if (guide) {
@@ -425,15 +510,15 @@ async function mergeThenRepair(baseZip, addonZip, baseName){
 
 /* ===== handlers ===== */
 async function onBaseFile(file){
-  baseFile=file; 
-  showSel('base',file); 
+  baseFile=file;
+  showSel('base',file);
   await coverPreview('base',file);
-  btnRepair.disabled=!baseFile; 
+  btnRepair.disabled=!baseFile;
   btnMerge.disabled=!(baseFile&&addonFile);
 }
 async function onAddonFile(file){
-  addonFile=file; 
-  showSel('addon',file); 
+  addonFile=file;
+  showSel('addon',file);
   await coverPreview('addon',file);
   btnMerge.disabled=!(baseFile&&addonFile);
 }
